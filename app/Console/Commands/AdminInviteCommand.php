@@ -2,8 +2,11 @@
 
 namespace App\Console\Commands;
 
+use App\Mail\AdminInviteEmail;
 use Illuminate\Console\Command;
 use App\Models\AdminInvite;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
 class AdminInviteCommand extends Command
@@ -124,6 +127,12 @@ class AdminInviteCommand extends Command
         $invite->invite_code = Str::uuid() . Str::random(random_int(1,6));
         $invite->save();
 
+        if($this->confirm('Send invitation email to user?')) {
+            $email = $this->promptForEmail();
+
+            Mail::to($email)->send(new AdminInviteEmail($invite));
+        }
+
         $this->info('####################');
         $this->info('# Invite Generated!');
         $this->line(' ');
@@ -175,5 +184,25 @@ class AdminInviteCommand extends Command
         $invite->expires_at = now()->subHours(2);
         $invite->save();
         $this->info('Expired the following invite: ' . $invite->url());
+    }
+
+    protected function promptForEmail(): string
+    {
+        do {
+            $email = $this->ask('What email should the invite be sent to?');
+
+            $validator = Validator::make(
+                ['email' => $email],
+                ['email' => ['required', 'email:rfc,dns']]
+            );
+
+            if ($validator->fails()) {
+                $this->error($validator->errors()->first('email'));
+                $this->newLine();
+                continue;
+            }
+
+            return $email;
+        } while (true);
     }
 }
